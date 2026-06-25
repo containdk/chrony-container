@@ -15,7 +15,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # ---------------------------------------------------------
       # 1. BUILD LOCAL IMAGE
@@ -57,7 +57,7 @@ jobs:
       # 3. TRIVY VULNERABILITY SCAN
       # ---------------------------------------------------------
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: 'local-chrony:test'
           format: 'table'
