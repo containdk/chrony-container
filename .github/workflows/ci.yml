@@ -1,0 +1,67 @@
+name: CI (Build, Test & Scan)
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    name: Build, Test, and Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # Secure default: Read-only access to repository contents
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ---------------------------------------------------------
+      # 1. BUILD LOCAL IMAGE
+      # ---------------------------------------------------------
+      - name: Build local Docker image
+        run: |
+          docker build -t local-chrony:test .
+
+      # ---------------------------------------------------------
+      # 2. RUN FUNCTIONAL READ-ONLY TEST
+      # ---------------------------------------------------------
+      - name: Test running Chrony in read-only mode
+        run: |
+          docker run -d --name test-instance --read-only \
+            --tmpfs /run/chrony:uid=100,gid=101,mode=0750 \
+            --tmpfs /var/lib/chrony:uid=100,gid=101,mode=0750 \
+            -p 1123:123/udp local-chrony:test
+          
+          # Wait for container to start
+          sleep 3
+          docker logs test-instance
+          
+          # Validate that chronyd has started successfully
+          if ! docker logs test-instance 2>&1 | grep -q "starting"; then
+            echo "FAIL: Chrony did not start successfully!"
+            exit 1
+          fi
+          
+          # Validate that no folder permission warnings occurred
+          if docker logs test-instance 2>&1 | grep -q "Wrong permissions"; then
+            echo "FAIL: Wrong permissions on /run/chrony or state directories!"
+            exit 1
+          fi
+          
+          echo "SUCCESS: Read-only container test passed."
+          docker rm -f test-instance
+
+      # ---------------------------------------------------------
+      # 3. TRIVY VULNERABILITY SCAN
+      # ---------------------------------------------------------
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: 'local-chrony:test'
+          format: 'table'
+          exit-code: '1' # Fail build on finding High/Critical CVEs
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
