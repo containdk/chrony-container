@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chrony-config
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: ntp-server
+    app.kubernetes.io/instance: ntp-server
+    app.kubernetes.io/component: server
+    app.kubernetes.io/part-of: ntp
+    app.kubernetes.io/managed-by: manual
+data:
+  chrony.conf: |
+    # ---------------------------------------------------------
+    # 1. UPSTREAM TIME SOURCES (Datacenter NTP)
+    # ---------------------------------------------------------
+    # Replace these with your local datacenter or pool NTP servers
+    server 8.8.8.8 iburst
+    server 8.8.4.4 iburst
+    
+    # ---------------------------------------------------------
+    # 2. CLIENT ACCESS (Production Hypervisors)
+    # ---------------------------------------------------------
+    # ALLOW your specific production subnets here. 
+    # Using 10.0.0.0/8 as a placeholder based on your FRR config.
+    allow 10.0.0.0/8
+    
+    # ---------------------------------------------------------
+    # 3. BEHAVIORAL SETTINGS
+    # ---------------------------------------------------------
+    # Record the rate at which the system clock gains/losses time.
+    # Supported via a writable emptyDir volume in the DaemonSet.
+    driftfile /var/lib/chrony/chrony.drift
+
+    # Serve time even if upstream is temporarily unreachable
+    local stratum 3
+    
+    # Do not log client accesses to save disk I/O on the management nodes
+    noclientlog
+    
+    # Disable command socket listening on external interfaces for security
+    bindcmdaddress 127.0.0.1
+    bindcmdaddress ::1
