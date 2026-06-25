@@ -53,9 +53,6 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha,prefix=sha-
 
       # Install Cosign (Sigstore)
       - name: Install Cosign
@@ -85,11 +82,26 @@ jobs:
           # Sign by digest to cover all tags pointing to this build
           cosign sign --yes "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build-and-push.outputs.digest }}"
 
+      # ---------------------------------------------------------
+      # 5. PREPARE MANIFESTS WITH CONCRETE VERSION
+      # ---------------------------------------------------------
+      - name: Prepare release manifests
+        run: |
+          mkdir -p dist
+          # Copy ConfigMap unchanged
+          cp kubernetes/configmap.yaml dist/configmap.yaml
+
+          # Replace latest tag with the exact release tag in the DaemonSet
+          sed "s|image: ghcr.io/containdk/chrony:latest|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}|g" kubernetes/daemonset.yaml > dist/daemonset.yaml
+
       # Draft/Publish GitHub Release
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           name: Release ${{ github.ref_name }}
+          files: |
+            dist/configmap.yaml
+            dist/daemonset.yaml
           body: |
             ## Chrony Container Release `${{ github.ref_name }}`
             
