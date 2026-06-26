@@ -18,11 +18,12 @@ jobs:
         uses: actions/checkout@v7
 
       # ---------------------------------------------------------
-      # 1. BUILD LOCAL IMAGE
+      # 1. BUILD LOCAL IMAGES
       # ---------------------------------------------------------
-      - name: Build local Docker image
+      - name: Build local Docker images
         run: |
           docker build -t local-chrony:test .
+          docker build -f Dockerfile.exporter -t local-chrony-exporter:test .
 
       # ---------------------------------------------------------
       # 2. RUN FUNCTIONAL READ-ONLY TEST
@@ -56,10 +57,20 @@ jobs:
       # ---------------------------------------------------------
       # 3. TRIVY VULNERABILITY SCAN
       # ---------------------------------------------------------
-      - name: Run Trivy vulnerability scanner
+      - name: Run Trivy vulnerability scanner on local Chrony image
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: 'local-chrony:test'
+          format: 'table'
+          exit-code: '1' # Fail build on finding High/Critical CVEs
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Run Trivy vulnerability scanner on local Chrony Exporter image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: 'local-chrony-exporter:test'
           format: 'table'
           exit-code: '1' # Fail build on finding High/Critical CVEs
           ignore-unfixed: true

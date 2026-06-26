@@ -112,3 +112,11 @@ securityContext:
    - `drop: [ALL]` removes all standard Linux capabilities.
    - `add: [NET_BIND_SERVICE]` is the single required capability, allowing the container to bind directly to host UDP port `123` (since NTP is a privileged port).
    - **No `CAP_SYS_TIME` required:** Because we run Chrony with `-x`, it does not modify the kernel clock and does not require system-time manipulation capabilities.
+
+---
+
+## Attribution
+
+This project packages and relies on:
+- [Chrony](https://chrony-project.org/) — the underlying high-performance NTP daemon.
+- [chrony_exporter](https://github.com/superq/chrony_exporter) by [SuperQ](https://github.com/superq) — the Prometheus exporter used to query Chrony and expose metrics.
