@@ -83,7 +83,26 @@ jobs:
           cosign sign --yes "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build-and-push.outputs.digest }}"
 
       # ---------------------------------------------------------
-      # 5. PREPARE MANIFESTS WITH CONCRETE VERSION
+      # 5. SCAN SIDECAR EXPORTER WITH TRIVY
+      # ---------------------------------------------------------
+      - name: Extract chrony_exporter image reference
+        id: extract-exporter
+        run: |
+          EXPORTER_IMAGE=$(yq eval '.spec.template.spec.containers[] | select(.name == "chrony-exporter") | .image' kubernetes/daemonset.yaml)
+          echo "image=${EXPORTER_IMAGE}" >> $GITHUB_OUTPUT
+
+      - name: Run Trivy scan on chrony_exporter sidecar
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ steps.extract-exporter.outputs.image }}
+          format: 'table'
+          exit-code: '1' # Fail release if high/critical CVEs exist
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+      # ---------------------------------------------------------
+      # 6. PREPARE MANIFESTS WITH CONCRETE VERSION
       # ---------------------------------------------------------
       - name: Prepare release manifests
         run: |

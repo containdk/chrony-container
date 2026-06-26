@@ -56,10 +56,26 @@ jobs:
       # ---------------------------------------------------------
       # 3. TRIVY VULNERABILITY SCAN
       # ---------------------------------------------------------
-      - name: Run Trivy vulnerability scanner
+      - name: Run Trivy vulnerability scanner on local Chrony image
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: 'local-chrony:test'
+          format: 'table'
+          exit-code: '1' # Fail build on finding High/Critical CVEs
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Extract chrony_exporter image reference
+        id: extract-exporter
+        run: |
+          EXPORTER_IMAGE=$(yq eval '.spec.template.spec.containers[] | select(.name == "chrony-exporter") | .image' kubernetes/daemonset.yaml)
+          echo "image=${EXPORTER_IMAGE}" >> $GITHUB_OUTPUT
+
+      - name: Run Trivy scan on chrony_exporter sidecar
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ steps.extract-exporter.outputs.image }}
           format: 'table'
           exit-code: '1' # Fail build on finding High/Critical CVEs
           ignore-unfixed: true
