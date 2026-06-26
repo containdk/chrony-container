@@ -1,0 +1,37 @@
+# =========================================================
+# STAGE 1: Compile Hardened Statically-Linked Exporter
+# =========================================================
+FROM golang:1.26.3-alpine AS builder
+
+RUN apk add --no-cache git
+
+WORKDIR /src
+
+# Clone official superq/chrony_exporter source code at tag v0.13.3
+RUN git clone --depth 1 --branch v0.13.3 https://github.com/superq/chrony_exporter.git .
+
+# Force upgrade vulnerable Go modules to safe versions
+RUN go get golang.org/x/crypto@v0.52.0 golang.org/x/net@v0.55.0 && go mod tidy
+
+# Compile zero-dependency static Go binary
+RUN CGO_ENABLED=0 GOOS=linux go build \
+      -ldflags="-s -w" \
+      -o chrony-exporter .
+
+# =========================================================
+# STAGE 2: Secure Distroless Final Image
+# =========================================================
+FROM gcr.io/distroless/static-debian12:latest
+
+LABEL org.opencontainers.image.title="chrony-exporter" \
+      org.opencontainers.image.description="Hardened, zero-vulnerability Prometheus Chrony Exporter running on a distroless static base." \
+      org.opencontainers.image.licenses="Apache-2.0"
+
+COPY --from=builder /src/chrony-exporter /bin/chrony-exporter
+
+EXPOSE 9123
+
+# Run as non-root nobody (uid 65534, gid 65534)
+USER 65534:65534
+
+ENTRYPOINT ["/bin/chrony-exporter"]

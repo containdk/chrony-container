@@ -54,6 +54,15 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
 
+      # Extract tags and labels for chrony-exporter
+      - name: Extract Exporter Docker metadata
+        id: meta-exporter
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/chrony-exporter
+          tags: |
+            type=semver,pattern={{version}}
+
       # Install Cosign (Sigstore)
       - name: Install Cosign
         uses: sigstore/cosign-installer@v4.1.2
@@ -82,19 +91,34 @@ jobs:
           # Sign by digest to cover all tags pointing to this build
           cosign sign --yes "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build-and-push.outputs.digest }}"
 
+      # Build and Push Exporter (multi-platform: amd64 and arm64)
+      - name: Build and Push Docker image for Exporter
+        id: build-and-push-exporter
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.exporter
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta-exporter.outputs.tags }}
+          labels: ${{ steps.meta-exporter.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Sign the exporter image using OIDC keyless signing
+      - name: Sign the published Exporter Docker image
+        env:
+          COSIGN_YES: "true"
+        run: |
+          cosign sign --yes "${{ env.REGISTRY }}/${{ github.repository_owner }}/chrony-exporter@${{ steps.build-and-push-exporter.outputs.digest }}"
+
       # ---------------------------------------------------------
       # 5. SCAN SIDECAR EXPORTER WITH TRIVY
       # ---------------------------------------------------------
-      - name: Extract chrony_exporter image reference
-        id: extract-exporter
-        run: |
-          EXPORTER_IMAGE=$(yq eval '.spec.template.spec.containers[] | select(.name == "chrony-exporter") | .image' kubernetes/daemonset.yaml)
-          echo "image=${EXPORTER_IMAGE}" >> $GITHUB_OUTPUT
-
-      - name: Run Trivy scan on chrony_exporter sidecar
+      - name: Run Trivy scan on published Chrony Exporter image
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ steps.extract-exporter.outputs.image }}
+          image-ref: '${{ env.REGISTRY }}/${{ github.repository_owner }}/chrony-exporter:${{ github.ref_name }}'
           format: 'table'
           exit-code: '1' # Fail release if high/critical CVEs exist
           ignore-unfixed: true
@@ -110,8 +134,10 @@ jobs:
           # Copy ConfigMap unchanged
           cp kubernetes/configmap.yaml dist/configmap.yaml
 
-          # Replace latest tag with the exact release tag in the DaemonSet
-          sed "s|image: ghcr.io/containdk/chrony:latest|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}|g" kubernetes/daemonset.yaml > dist/daemonset.yaml
+          # Replace latest tags with the exact release tags in the DaemonSet for both images
+          sed -e "s|image: ghcr.io/containdk/chrony:latest|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}|g" \
+              -e "s|image: ghcr.io/containdk/chrony-exporter:latest|image: ${{ env.REGISTRY }}/${{ github.repository_owner }}/chrony-exporter:${{ github.ref_name }}|g" \
+              kubernetes/daemonset.yaml > dist/daemonset.yaml
 
       # Draft/Publish GitHub Release
       - name: Create GitHub Release
@@ -124,20 +150,24 @@ jobs:
           body: |
             ## Chrony Container Release `${{ github.ref_name }}`
             
-            This release packages Chrony inside a secure, containerized environment fully compatible with read-only root filesystems (e.g., Kubernetes nodes running Talos Linux).
+            This release packages Chrony and its Prometheus exporter inside a secure, containerized environment fully compatible with read-only root filesystems (e.g., Kubernetes nodes running Talos Linux).
             
-            ### Container Image Info
-            - **Registry:** `ghcr.io`
-            - **Image:** `${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}`
-            - **Digest:** `${{ steps.build-and-push.outputs.digest }}`
+            ### Container Images Info
+            - **Chrony Image:** `${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}`
+            - **Chrony Exporter Image:** `${{ env.REGISTRY }}/${{ github.repository_owner }}/chrony-exporter:${{ github.ref_name }}`
             
-            ### Verifying the Image Signature
-            To verify the keyless OIDC signature using `cosign`, execute:
+            ### Verifying the Image Signatures
+            To verify the keyless OIDC signatures using `cosign`, execute:
             ```bash
             cosign verify \
               --certificate-identity-regexp "https://github.com/${{ github.repository_owner }}/.*" \
               --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
               ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build-and-push.outputs.digest }}
+
+            cosign verify \
+              --certificate-identity-regexp "https://github.com/${{ github.repository_owner }}/.*" \
+              --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+              ${{ env.REGISTRY }}/${{ github.repository_owner }}/chrony-exporter@${{ steps.build-and-push-exporter.outputs.digest }}
             ```
           draft: false
           prerelease: false

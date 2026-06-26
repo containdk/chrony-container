@@ -68,7 +68,7 @@ spec:
               mountPath: /var/lib/chrony
 
         - name: chrony-exporter
-          image: quay.io/superq/chrony-exporter:v0.13.3
+          image: ghcr.io/containdk/chrony-exporter:latest
           imagePullPolicy: IfNotPresent
 
           ports:
