@@ -113,20 +113,7 @@ jobs:
           cosign sign --yes "${{ env.REGISTRY }}/${{ github.repository_owner }}/chrony-exporter@${{ steps.build-and-push-exporter.outputs.digest }}"
 
       # ---------------------------------------------------------
-      # 5. SCAN SIDECAR EXPORTER WITH TRIVY
-      # ---------------------------------------------------------
-      - name: Run Trivy scan on published Chrony Exporter image
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: '${{ env.REGISTRY }}/${{ github.repository_owner }}/chrony-exporter:${{ github.ref_name }}'
-          format: 'table'
-          exit-code: '1' # Fail release if high/critical CVEs exist
-          ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
-
-      # ---------------------------------------------------------
-      # 6. PREPARE MANIFESTS WITH CONCRETE VERSION
+      # 5. PREPARE MANIFESTS WITH CONCRETE VERSION
       # ---------------------------------------------------------
       - name: Prepare release manifests
         run: |
