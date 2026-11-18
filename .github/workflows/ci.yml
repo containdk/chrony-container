@@ -54,6 +54,28 @@ jobs:
           echo "SUCCESS: Read-only container test passed."
           docker rm -f test-instance
 
+      - name: Test that Chrony starts again after a kill
+        run: |
+          # A named volume keeps /run/chrony across restarts, as an emptyDir does in a pod.
+          docker volume create chrony-run
+          docker run -d --name restart-instance --read-only \
+            -v chrony-run:/run/chrony \
+            --tmpfs /var/lib/chrony:uid=100,gid=101,mode=0750 \
+            local-chrony:test
+          sleep 3
+          docker kill -s KILL restart-instance
+          docker start restart-instance
+          sleep 3
+          docker logs restart-instance
+
+          if [ "$(docker inspect -f '{{.State.Running}}' restart-instance)" != "true" ]; then
+            echo "FAIL: Chrony did not start again after a kill!"
+            exit 1
+          fi
+
+          echo "SUCCESS: Restart test passed."
+          docker rm -f restart-instance
+
       # ---------------------------------------------------------
       # 3. TRIVY VULNERABILITY SCAN
       # ---------------------------------------------------------
