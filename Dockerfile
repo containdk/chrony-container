@@ -19,7 +19,7 @@ RUN apk add --no-cache \
 RUN apk add --no-cache chrony
 
 # Download and extract Chrony source code
-ENV CHRONY_VERSION=4.5
+ENV CHRONY_VERSION=4.9
 RUN curl -s https://chrony-project.org/releases/chrony-${CHRONY_VERSION}.tar.gz | tar xz
 
 # Configure and compile Chrony statically with seccomp sandbox filtering

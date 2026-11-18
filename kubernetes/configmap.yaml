@@ -37,7 +37,11 @@ data:
     
     # Do not log client accesses to save disk I/O on the management nodes
     noclientlog
-    
+
+    # chronyd runs as PID 1. A PID file kept on the chrony-run emptyDir holds
+    # that PID after a container restart, and chronyd then refuses to start.
+    pidfile /
+
     # Disable command socket listening on external interfaces for security
     bindcmdaddress 127.0.0.1
     bindcmdaddress ::1
